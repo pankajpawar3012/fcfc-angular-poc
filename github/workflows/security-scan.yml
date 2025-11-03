@@ -48,7 +48,7 @@ jobs:
       - name: Run Dependabot SCA
         id: dep
         uses: github/dependabot-action@v1
-        continue-on-error: true
+        continue-on-error: false
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
