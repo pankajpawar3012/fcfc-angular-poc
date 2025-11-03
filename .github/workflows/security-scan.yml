@@ -1,47 +1,114 @@
-name: SAST (Semgrep), SCA (Dependabot), SBOM (CycloneDX)
+name: SAST, SCA & SBOM Scan
 
 on:
   push:
-    branches: ['*']  # Every branch
+    branches: ['*']
   pull_request:
     branches: [main]
 
 jobs:
+  # ----------------------
+  # SAST: Semgrep
+  # ----------------------
   sast-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Run Semgrep SAST
-        uses: semgrep/action@v1
+      - name: Checkout Fresh Repo
+        uses: actions/checkout@v4
         with:
-          config: auto  # Auto-detect rules for JS/Angular
-        env:
-          SEMGREP_RULES: p/semgrep-rules  # OWASP rules
+          clean: true          # Forces fresh clone
+          fetch-depth: 0       # Full history
 
+      - name: Run Semgrep SAST
+        uses: returntocorp/semgrep-action@v1
+        with:
+          config: auto
+
+  # ----------------------
+  # SCA: Snyk (detailed output + fail on vulns)
+  # ----------------------
   sca-scan:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
     steps:
-      - uses: actions/checkout@v4
-      - name: Run Dependabot SCA
+      - name: Checkout Fresh Repo
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
+
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '18'
-      - run: npm ci
-      - uses: github/dependabot-action@v1  # Scans deps for vulns
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Snyk CLI
+        run: npm install -g snyk
+
+      - name: Authenticate with Snyk
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+
+      - name: Run Snyk SCA scan and show all vulnerabilities
+        run: |
+          echo "🔍 Running Snyk test (show all vulnerabilities)..."
+          snyk test --all-projects --severity-threshold=low --json > snyk-results.json || true
+
+          echo "--------------------------------------"
+          echo "📋 Detected Vulnerabilities Summary"
+          echo "--------------------------------------"
+          cat snyk-results.json | jq -r '
+            .vulnerabilities[]? |
+            "\(.title)\nSeverity: \(.severity | ascii_upcase)\nPackage: \(.packageName)@\(.version)\nDescription: \(.description)\n---"
+          ' || echo "✅ No vulnerabilities found."
+
+          # Count vulnerabilities to decide whether to fail
+          vulns=$(jq '.vulnerabilities | length' snyk-results.json)
+          echo "Total vulnerabilities found: $vulns"
+          if [ "$vulns" -gt 0 ]; then
+            echo "❌ Vulnerabilities detected! Failing job..."
+            exit 1
+          else
+            echo "✅ No vulnerabilities detected!"
+          fi
+
+      - name: Upload full Snyk JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: snyk-sca-report
+          path: ./frontend/snyk-results.json
+
+  # ----------------------
+  # SBOM: cdxgen
+  # ----------------------
   sbom-generate:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
     steps:
-      - uses: actions/checkout@v4
-      - name: Install CycloneDX
-        run: |
-          wget https://github.com/CycloneDX/cyclonedx-cli/releases/latest/download/cyclonedx-linux-amd64.tar.gz
-          tar -xzf cyclonedx-linux-amd64.tar.gz
-          sudo mv cyclonedx /usr/local/bin/
+      - name: Checkout Fresh Repo
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - run: npm ci
+
+      - name: Install cdxgen
+        run: npm install -g @cyclonedx/cdxgen
+
       - name: Generate SBOM
-        run: cyclonedx-cli generate --type node --output sbom.json
+        run: cdxgen -o sbom.json
+
       - uses: actions/upload-artifact@v4
         with:
           name: sbom
