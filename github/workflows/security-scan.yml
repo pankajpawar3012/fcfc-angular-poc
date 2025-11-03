@@ -13,14 +13,19 @@ jobs:
   sast-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Fresh Repo
+        uses: actions/checkout@v4
+        with:
+          clean: true          # Forces fresh clone
+          fetch-depth: 0       # Full history
+
       - name: Run Semgrep SAST
         uses: returntocorp/semgrep-action@v1
         with:
           config: auto
 
   # ----------------------
-  # SCA: Dependabot (with details + fail)
+  # SCA: Dependabot (details + fail)
   # ----------------------
   sca-scan:
     runs-on: ubuntu-latest
@@ -28,10 +33,16 @@ jobs:
       run:
         working-directory: ./frontend
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Fresh Repo
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
+
       - run: npm ci
 
       - name: Run Dependabot SCA
@@ -41,20 +52,20 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Show Vulnerability Details
+      - name: Show SCA Vulnerabilities
+        if: steps.dep.outputs.vulnerability-count > 0
         run: |
           echo "Dependabot found ${{ steps.dep.outputs.vulnerability-count }} vulnerabilities:"
           echo ""
           echo "${{ steps.dep.outputs.vulnerabilities }}"
-        if: steps.dep.outputs.vulnerability-count > 0
 
       - name: Fail on Vulnerabilities
-        run: exit 1
         if: steps.dep.outputs.vulnerability-count > 0
+        run: exit 1
 
       - name: SCA Passed
-        run: echo "No vulnerable dependencies found"
         if: steps.dep.outputs.vulnerability-count == 0
+        run: echo "No vulnerable dependencies"
 
   # ----------------------
   # SBOM: cdxgen
@@ -65,15 +76,24 @@ jobs:
       run:
         working-directory: ./frontend
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Fresh Repo
+        uses: actions/checkout@v4
+        with:
+          clean: true
+          fetch-depth: 0
+
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
+
       - run: npm ci
+
       - name: Install cdxgen
         run: npm install -g @cyclonedx/cdxgen
+
       - name: Generate SBOM
         run: cdxgen -o sbom.json
+
       - uses: actions/upload-artifact@v4
         with:
           name: sbom
