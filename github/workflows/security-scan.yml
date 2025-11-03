@@ -10,11 +10,11 @@ jobs:
   sast-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v3
       - name: Run Semgrep SAST
         uses: returntocorp/semgrep-action@v1  # FIXED: Official, maintained action
         with:
-          config: auto  # Auto-detect rules for JS/Angular
+          config: p/default  # Auto-detect rules for JS/Angular 
 
   sca-scan:
     runs-on: ubuntu-latest
