@@ -1,4 +1,4 @@
-name: SAST (Semgrep), SCA (Dependabot), SBOM (cdxgen)
+name: SAST, SCA & SBOM Scan
 
 on:
   push:
@@ -7,6 +7,9 @@ on:
     branches: [main]
 
 jobs:
+  # ----------------------
+  # SAST: Semgrep
+  # ----------------------
   sast-scan:
     runs-on: ubuntu-latest
     steps:
@@ -16,6 +19,9 @@ jobs:
         with:
           config: auto
 
+  # ----------------------
+  # SCA: Dependabot (with details + fail)
+  # ----------------------
   sca-scan:
     runs-on: ubuntu-latest
     defaults:
@@ -27,11 +33,32 @@ jobs:
         with:
           node-version: '18'
       - run: npm ci
-      - name: Dependabot SCA
+
+      - name: Run Dependabot SCA
+        id: dep
         uses: github/dependabot-action@v1
+        continue-on-error: true
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Show Vulnerability Details
+        run: |
+          echo "Dependabot found ${{ steps.dep.outputs.vulnerability-count }} vulnerabilities:"
+          echo ""
+          echo "${{ steps.dep.outputs.vulnerabilities }}"
+        if: steps.dep.outputs.vulnerability-count > 0
+
+      - name: Fail on Vulnerabilities
+        run: exit 1
+        if: steps.dep.outputs.vulnerability-count > 0
+
+      - name: SCA Passed
+        run: echo "No vulnerable dependencies found"
+        if: steps.dep.outputs.vulnerability-count == 0
+
+  # ----------------------
+  # SBOM: cdxgen
+  # ----------------------
   sbom-generate:
     runs-on: ubuntu-latest
     defaults:
@@ -43,7 +70,7 @@ jobs:
         with:
           node-version: '18'
       - run: npm ci
-      - name: Install cdxgen (CycloneDX for npm)
+      - name: Install cdxgen
         run: npm install -g @cyclonedx/cdxgen
       - name: Generate SBOM
         run: cdxgen -o sbom.json
