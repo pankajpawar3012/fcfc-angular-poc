@@ -1,8 +1,8 @@
-name: SAST (Semgrep), SCA (Dependabot), SBOM (CycloneDX)
+name: SAST (Semgrep), SCA (Dependabot), SBOM (cdxgen)
 
 on:
   push:
-    branches: ['*']  # Every branch (feature, main, etc.)
+    branches: ['*']  # Every branch
   pull_request:
     branches: [main]
 
@@ -12,9 +12,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Run Semgrep SAST
-        uses: returntocorp/semgrep-action@v1  # FIXED: Official, maintained action
+        uses: returntocorp/semgrep-action@v1
         with:
-          config: p/default  # Auto-detect rules for JS/Angular 
+          config: auto  # Auto-detect rules for JS/Angular
 
   sca-scan:
     runs-on: ubuntu-latest
@@ -39,13 +39,14 @@ jobs:
         working-directory: ./frontend
     steps:
       - uses: actions/checkout@v4
-      - name: Install CycloneDX
-        run: |
-          wget https://github.com/CycloneDX/cyclonedx-cli/releases/latest/download/cyclonedx-linux-amd64.tar.gz
-          tar -xzf cyclonedx-linux-amd64.tar.gz
-          sudo mv cyclonedx /usr/local/bin/
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - run: npm ci
+      - name: Install cdxgen
+        run: npm install -g @cyclonedx/cdxgen
       - name: Generate SBOM
-        run: cyclonedx-cli generate --type node --output sbom.json
+        run: cdxgen -o sbom.json
       - uses: actions/upload-artifact@v4
         with:
           name: sbom
