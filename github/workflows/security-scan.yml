@@ -2,7 +2,7 @@ name: SAST (Semgrep), SCA (Dependabot), SBOM (cdxgen)
 
 on:
   push:
-    branches: ['*']  # Every branch
+    branches: ['*']
   pull_request:
     branches: [main]
 
@@ -14,7 +14,7 @@ jobs:
       - name: Run Semgrep SAST
         uses: returntocorp/semgrep-action@v1
         with:
-          config: auto  # Auto-detect rules for JS/Angular
+          config: auto
 
   sca-scan:
     runs-on: ubuntu-latest
@@ -43,7 +43,7 @@ jobs:
         with:
           node-version: '18'
       - run: npm ci
-      - name: Install cdxgen
+      - name: Install cdxgen (CycloneDX for npm)
         run: npm install -g @cyclonedx/cdxgen
       - name: Generate SBOM
         run: cdxgen -o sbom.json
