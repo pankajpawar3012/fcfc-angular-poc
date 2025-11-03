@@ -25,7 +25,7 @@ jobs:
           config: auto
 
   # ----------------------
-  # SCA: Dependabot (details + fail)
+  # SCA: Snyk (detailed output + fail on vulns)
   # ----------------------
   sca-scan:
     runs-on: ubuntu-latest
@@ -39,33 +39,48 @@ jobs:
           clean: true
           fetch-depth: 0
 
-      - uses: actions/setup-node@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: '18'
 
-      - run: npm ci
+      - name: Install dependencies
+        run: npm ci
 
-      - name: Run Dependabot SCA
-        id: dep
-        uses: github/dependabot-action@v1
-        continue-on-error: false
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Install Snyk CLI
+        run: npm install -g snyk
 
-      - name: Show SCA Vulnerabilities
-        if: steps.dep.outputs.vulnerability-count > 0
+      - name: Authenticate with Snyk
+        run: snyk auth ${{ secrets.SNYK_TOKEN }}
+
+      - name: Run Snyk SCA scan and show all vulnerabilities
         run: |
-          echo "Dependabot found ${{ steps.dep.outputs.vulnerability-count }} vulnerabilities:"
-          echo ""
-          echo "${{ steps.dep.outputs.vulnerabilities }}"
+          echo "🔍 Running Snyk test (show all vulnerabilities)..."
+          snyk test --all-projects --severity-threshold=low --json > snyk-results.json || true
 
-      - name: Fail on Vulnerabilities
-        if: steps.dep.outputs.vulnerability-count > 0
-        run: exit 1
+          echo "--------------------------------------"
+          echo "📋 Detected Vulnerabilities Summary"
+          echo "--------------------------------------"
+          cat snyk-results.json | jq -r '
+            .vulnerabilities[]? |
+            "\(.title)\nSeverity: \(.severity | ascii_upcase)\nPackage: \(.packageName)@\(.version)\nDescription: \(.description)\n---"
+          ' || echo "✅ No vulnerabilities found."
 
-      - name: SCA Passed
-        if: steps.dep.outputs.vulnerability-count == 0
-        run: echo "No vulnerable dependencies"
+          # Count vulnerabilities to decide whether to fail
+          vulns=$(jq '.vulnerabilities | length' snyk-results.json)
+          echo "Total vulnerabilities found: $vulns"
+          if [ "$vulns" -gt 0 ]; then
+            echo "❌ Vulnerabilities detected! Failing job..."
+            exit 1
+          else
+            echo "✅ No vulnerabilities detected!"
+          fi
+
+      - name: Upload full Snyk JSON report
+        uses: actions/upload-artifact@v4
+        with:
+          name: snyk-sca-report
+          path: ./frontend/snyk-results.json
 
   # ----------------------
   # SBOM: cdxgen
