@@ -1,0 +1,48 @@
+name: SAST (Semgrep), SCA (Dependabot), SBOM (CycloneDX)
+
+on:
+  push:
+    branches: ['*']  # Every branch
+  pull_request:
+    branches: [main]
+
+jobs:
+  sast-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Semgrep SAST
+        uses: semgrep/action@v1
+        with:
+          config: auto  # Auto-detect rules for JS/Angular
+        env:
+          SEMGREP_RULES: p/semgrep-rules  # OWASP rules
+
+  sca-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run Dependabot SCA
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      - run: npm ci
+      - uses: github/dependabot-action@v1  # Scans deps for vulns
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+  sbom-generate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CycloneDX
+        run: |
+          wget https://github.com/CycloneDX/cyclonedx-cli/releases/latest/download/cyclonedx-linux-amd64.tar.gz
+          tar -xzf cyclonedx-linux-amd64.tar.gz
+          sudo mv cyclonedx /usr/local/bin/
+      - name: Generate SBOM
+        run: cyclonedx-cli generate --type node --output sbom.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
