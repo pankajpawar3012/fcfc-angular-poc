@@ -11,6 +11,6 @@ export class App {
 
   // VULNERABLE: Code Injection via eval()
   runCode(userInput: string) {
-    eval(userInput); // Veracode will flag this as HIGH
+    //eval(userInput); // Veracode will flag this as HIGH
   }
 }
