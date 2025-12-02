@@ -7,7 +7,7 @@ import { Component, signal } from '@angular/core';
   styleUrl: './app.css'
 })
 export class App {
-  title = 'fcfc-poc';
+    title: string = 'fcfc-poc';
 
   // VULNERABLE: Code Injection via eval()
   runCode(userInput: string) {
